@@ -68,7 +68,7 @@ def format_prompt_for_model(problem: HumanEvalProblem, model_type: str = "deepse
         # Llama 3.1 Instruct format (using chat template style)
         return f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
-You are an expert Python programmer. Complete the function by writing only the implementation code. Do not repeat the function signature or add explanations.<|eot_id|><|start_header_id|>user<|end_header_id|}
+You are an expert Python programmer. Complete the function by writing only the implementation code. Do not repeat the function signature or add explanations.<|eot_id|><|start_header_id|>user<|end_header_id|>
 
 Complete the following Python function:
 

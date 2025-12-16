@@ -64,6 +64,7 @@ def generate_k_solutions(
     method: Literal["greedy", "temperature", "nucleus", "embed_noise"],
     method_kwargs: Optional[dict] = None,
     noise_injector: Optional[EmbeddingNoiseInjector] = None,
+    show_progress: bool = False,
 ) -> List[str]:
     """
     Generate K solutions using the specified method.
@@ -76,6 +77,7 @@ def generate_k_solutions(
         method: Sampling method
         method_kwargs: Additional kwargs for the method (e.g., temperature value)
         noise_injector: Required for embed_noise method
+        show_progress: Whether to show a progress bar
     
     Returns:
         List of K generated solutions
@@ -83,7 +85,12 @@ def generate_k_solutions(
     method_kwargs = method_kwargs or {}
     solutions = []
     
-    for i in range(k):
+    iterator = range(k)
+    if show_progress:
+        from tqdm import tqdm
+        iterator = tqdm(iterator, desc=f"  {method}", leave=False)
+    
+    for i in iterator:
         if method == "greedy":
             config = GenerationConfig(do_sample=False)
             

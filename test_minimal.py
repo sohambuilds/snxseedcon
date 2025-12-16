@@ -59,11 +59,15 @@ def run_minimal_test():
     
     print("\n[4/4] Running generation experiments...")
     print(f"    Problems: {N_PROBLEMS}, Samples per method: {K_SAMPLES}")
+    print(f"    Total generations: {N_PROBLEMS * K_SAMPLES * len(methods)}")
     
-    for problem in tqdm(problems, desc="Problems"):
+    for prob_idx, problem in enumerate(problems, 1):
+        print(f"\n--- Problem {prob_idx}/{N_PROBLEMS}: {problem.task_id} ---")
         prompt = format_prompt_for_model(problem, model_type="deepseek")
         
         for method_name, method_kwargs in methods.items():
+            print(f"  {method_name}:")
+            
             # Generate K solutions
             injector = noise_injector if method_name == "embed_noise" else None
             
@@ -75,11 +79,17 @@ def run_minimal_test():
                 method=method_name,
                 method_kwargs=method_kwargs,
                 noise_injector=injector,
+                show_progress=True,
             )
+            
+            print(f"    Checking correctness... ", end="", flush=True)
             
             # Extract function code and check correctness
             extracted = [extract_function_code(s, problem.entry_point) for s in solutions]
             passed = [check_solution(problem, s) for s in extracted]
+            
+            n_passed = sum(passed)
+            print(f"✓ ({n_passed}/{K_SAMPLES} passed)")
             
             results[method_name]["solutions"].extend(extracted)
             results[method_name]["pass_results"].extend(passed)

@@ -13,8 +13,10 @@ N_PROBLEMS = 5  # Number of HumanEval problems to test (max 164)
 K_SAMPLES = 10  # Samples per method per problem
 
 # Embedding noise configuration
-SIGMA_SCALE = 0.01  # Noise scale: sigma = SIGMA_SCALE × mean_embedding_norm
-                    # NOTE: 0.1 was WAY too high (0% compile). Try 0.001-0.05 range.
+# Based on experiments:
+#   per_token + σ=0.002 → 80% compile (best)
+#   per_sequence + σ=0.01 → 67% compile (allows higher σ)
+SIGMA_SCALE = 0.002  # Optimal for per_token noise
 NOISE_SCOPE = "per_token"  # "per_token" or "per_sequence"
 
 # Sigma values for sweep experiments (revised based on inspection)

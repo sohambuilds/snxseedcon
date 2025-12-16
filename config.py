@@ -17,8 +17,9 @@ SIGMA_SCALE = 0.01  # Noise scale: sigma = SIGMA_SCALE × mean_embedding_norm
                     # NOTE: 0.1 was WAY too high (0% compile). Try 0.001-0.05 range.
 NOISE_SCOPE = "per_token"  # "per_token" or "per_sequence"
 
-# Sigma values for sweep experiments
-SIGMA_SWEEP_VALUES = [0.001, 0.005, 0.01, 0.02, 0.05, 0.1]
+# Sigma values for sweep experiments (revised based on inspection)
+# Original 0.1 was way too high. Sweet spot appears to be 0.001-0.01
+SIGMA_SWEEP_VALUES = [0.001, 0.002, 0.005, 0.008, 0.01, 0.02]
 
 # Methods to compare
 METHODS = {

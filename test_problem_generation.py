@@ -28,8 +28,13 @@ from src.metrics import distinct_n, self_bleu
 
 
 # ============================================================
-# CONFIGURATION
+# CONFIGURATION - Edit for different models
 # ============================================================
+# Options:
+# - "deepseek-ai/deepseek-coder-6.7b-instruct"
+# - "deepseek-ai/deepseek-coder-33b-instruct"
+# - "Qwen/Qwen2.5-Coder-7B-Instruct"
+
 MODEL_NAME = "deepseek-ai/deepseek-coder-6.7b-instruct"
 MODEL_TYPE = "deepseek"
 LOAD_IN_8BIT = True
@@ -37,7 +42,7 @@ LOAD_IN_8BIT = True
 N_PROBLEMS = 10  # Problems to generate per method
 TOPICS = ["string", "list", "math", "game", "text"]  # Topics to test
 
-# Methods to compare
+# Methods to compare - based on 6.7B findings, σ=0.01 was best for validity
 SIGMA_VALUES = [0.002, 0.005, 0.01, 0.02]
 # ============================================================
 

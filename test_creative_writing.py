@@ -19,9 +19,14 @@ from src.metrics import distinct_n, self_bleu, mean_edit_distance
 
 
 # ============================================================
-# CONFIGURATION
+# CONFIGURATION - Edit for different models
 # ============================================================
-MODEL_NAME = "deepseek-ai/deepseek-coder-6.7b-instruct"  # Can use any model
+# Options:
+# - "deepseek-ai/deepseek-coder-6.7b-instruct"
+# - "deepseek-ai/deepseek-coder-33b-instruct"
+# - "Qwen/Qwen2.5-Coder-7B-Instruct"
+
+MODEL_NAME = "deepseek-ai/deepseek-coder-6.7b-instruct"
 LOAD_IN_8BIT = True
 
 N_SAMPLES = 10  # Continuations per prompt per method

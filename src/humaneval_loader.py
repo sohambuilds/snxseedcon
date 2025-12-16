@@ -53,7 +53,7 @@ def format_prompt_for_model(problem: HumanEvalProblem, model_type: str = "deepse
     
     Args:
         problem: The HumanEval problem
-        model_type: Type of model ("deepseek", "qwen", "generic")
+        model_type: Type of model ("deepseek", "llama3", "qwen", "codellama", "generic")
         
     Returns:
         Formatted prompt string
@@ -63,6 +63,18 @@ def format_prompt_for_model(problem: HumanEvalProblem, model_type: str = "deepse
         return f"""You are an expert Python programmer. Complete the following function.
 
 {problem.prompt}"""
+    
+    elif model_type == "llama3":
+        # Llama 3.1 Instruct format (using chat template style)
+        return f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+You are an expert Python programmer. Complete the function by writing only the implementation code. Do not repeat the function signature or add explanations.<|eot_id|><|start_header_id|>user<|end_header_id|}
+
+Complete the following Python function:
+
+{problem.prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+"""
     
     elif model_type == "qwen":
         # Qwen2.5-Coder instruct format

@@ -1,0 +1,41 @@
+"""
+Configuration for minimal test experiments.
+Edit this file to adjust parameters without modifying code.
+"""
+
+# Model configuration
+MODEL_NAME = "deepseek-ai/deepseek-coder-6.7b-instruct"  # Or use 33B for full scale
+LOAD_IN_8BIT = True  # Set to False if you have enough VRAM
+MODEL_TYPE = "deepseek"  # For prompt formatting
+
+# Dataset configuration
+N_PROBLEMS = 5  # Number of HumanEval problems to test (max 164)
+K_SAMPLES = 10  # Samples per method per problem
+
+# Embedding noise configuration
+SIGMA_SCALE = 0.01  # Noise scale: sigma = SIGMA_SCALE × mean_embedding_norm
+                    # NOTE: 0.1 was WAY too high (0% compile). Try 0.001-0.05 range.
+NOISE_SCOPE = "per_token"  # "per_token" or "per_sequence"
+
+# Sigma values for sweep experiments
+SIGMA_SWEEP_VALUES = [0.001, 0.005, 0.01, 0.02, 0.05, 0.1]
+
+# Methods to compare
+METHODS = {
+    "greedy": {},
+    "temperature": {"temperature": 0.8},
+    "embed_noise": {},
+}
+
+# You can add more methods:
+# "temp_high": {"temperature": 1.5},
+# "nucleus": {"top_p": 0.95},
+
+# Generation configuration
+MAX_NEW_TOKENS = 512  # Maximum tokens to generate per sample
+TIMEOUT = 5.0  # Timeout for code execution (seconds)
+
+# Display configuration
+SHOW_PROGRESS = True  # Show progress bars during generation
+SHOW_EXAMPLES = False  # Print example generated solutions
+

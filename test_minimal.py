@@ -9,6 +9,7 @@ This script demonstrates the core concept with a small-scale test:
 Run: python test_minimal.py
 """
 import torch
+import time
 from tqdm import tqdm
 
 from src.model_loader import load_model
@@ -16,16 +17,20 @@ from src.embedding_noise import EmbeddingNoiseInjector
 from src.generation import generate_k_solutions
 from src.humaneval_loader import load_humaneval, format_prompt_for_model, extract_function_code, check_solution
 from src.metrics import distinct_n, self_bleu, mean_edit_distance, compilation_rate, pass_at_k
+import config
 
 
 def run_minimal_test():
     """Run a minimal test comparing generation methods."""
     
-    # Configuration
-    MODEL_NAME = "deepseek-ai/deepseek-coder-6.7b-instruct"  # Smaller model for testing
-    N_PROBLEMS = 5  # Just a few problems for quick testing
-    K_SAMPLES = 10  # Samples per method per problem
-    SIGMA_SCALE = 0.1  # Noise scale
+    # Load configuration
+    MODEL_NAME = config.MODEL_NAME
+    N_PROBLEMS = config.N_PROBLEMS
+    K_SAMPLES = config.K_SAMPLES
+    SIGMA_SCALE = config.SIGMA_SCALE
+    NOISE_SCOPE = config.NOISE_SCOPE
+    LOAD_IN_8BIT = config.LOAD_IN_8BIT
+    MODEL_TYPE = config.MODEL_TYPE
     
     print("=" * 60)
     print("Minimal Test: Embedding Noise for Diverse Code Generation")
@@ -33,7 +38,7 @@ def run_minimal_test():
     
     # Load model
     print("\n[1/4] Loading model...")
-    model, tokenizer = load_model(MODEL_NAME, load_in_8bit=True)
+    model, tokenizer = load_model(MODEL_NAME, load_in_8bit=LOAD_IN_8BIT)
     
     # Load dataset
     print("\n[2/4] Loading HumanEval problems...")
@@ -43,16 +48,12 @@ def run_minimal_test():
     print("\n[3/4] Setting up embedding noise injector...")
     noise_injector = EmbeddingNoiseInjector(
         sigma_scale=SIGMA_SCALE,
-        noise_scope="per_token",
+        noise_scope=NOISE_SCOPE,
     )
     noise_injector.attach_to_model(model)
     
     # Methods to compare
-    methods = {
-        "greedy": {},
-        "temperature": {"temperature": 0.8},
-        "embed_noise": {},
-    }
+    methods = config.METHODS
     
     # Results storage
     results = {method: {"solutions": [], "pass_results": []} for method in methods}
@@ -63,13 +64,17 @@ def run_minimal_test():
     
     for prob_idx, problem in enumerate(problems, 1):
         print(f"\n--- Problem {prob_idx}/{N_PROBLEMS}: {problem.task_id} ---")
-        prompt = format_prompt_for_model(problem, model_type="deepseek")
+        prompt = format_prompt_for_model(problem, model_type=MODEL_TYPE)
         
         for method_name, method_kwargs in methods.items():
             print(f"  {method_name}:")
+            start_time = time.time()
             
             # Generate K solutions
             injector = noise_injector if method_name == "embed_noise" else None
+            
+            # Add max_new_tokens to kwargs
+            kwargs = {**method_kwargs, "max_new_tokens": config.MAX_NEW_TOKENS}
             
             solutions = generate_k_solutions(
                 model=model,
@@ -77,11 +82,13 @@ def run_minimal_test():
                 prompt=prompt,
                 k=K_SAMPLES,
                 method=method_name,
-                method_kwargs=method_kwargs,
+                method_kwargs=kwargs,
                 noise_injector=injector,
-                show_progress=True,
+                show_progress=config.SHOW_PROGRESS,
             )
             
+            gen_time = time.time() - start_time
+            print(f"    Generation: {gen_time:.1f}s ({gen_time/K_SAMPLES:.1f}s per sample)")
             print(f"    Checking correctness... ", end="", flush=True)
             
             # Extract function code and check correctness
@@ -89,7 +96,7 @@ def run_minimal_test():
             passed = [check_solution(problem, s) for s in extracted]
             
             n_passed = sum(passed)
-            print(f"✓ ({n_passed}/{K_SAMPLES} passed)")
+            print(f"✓ {n_passed}/{K_SAMPLES} passed")
             
             results[method_name]["solutions"].extend(extracted)
             results[method_name]["pass_results"].extend(passed)

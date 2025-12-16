@@ -65,18 +65,24 @@ def format_prompt_for_model(problem: HumanEvalProblem, model_type: str = "deepse
 {problem.prompt}"""
     
     elif model_type == "qwen":
-        # Qwen-Coder format
+        # Qwen2.5-Coder instruct format
         return f"""<|im_start|>system
-You are a helpful coding assistant.<|im_end|>
+You are a helpful coding assistant. Complete the function below.<|im_end|>
 <|im_start|>user
-Complete the following Python function:
-
 {problem.prompt}<|im_end|>
 <|im_start|>assistant
 """
     
+    elif model_type == "codellama":
+        # CodeLlama instruct format
+        return f"""[INST] Complete the following Python function:
+
+{problem.prompt}
+[/INST]
+"""
+    
     else:
-        # Generic format
+        # Generic format - just the prompt (works for many models)
         return problem.prompt
 
 

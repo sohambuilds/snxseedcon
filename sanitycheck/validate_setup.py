@@ -71,6 +71,16 @@ def validate():
             torch_dtype=torch_dtype,
             load_in_8bit=config.LOAD_IN_8BIT,
         )
+
+        # Print actual HF device map if present (helps diagnose CPU offload)
+        hf_map = getattr(model, "hf_device_map", None)
+        if hf_map is not None:
+            # Show a compact summary
+            unique_devices = sorted(set(hf_map.values()))
+            print(f"  Device map devices: {unique_devices}")
+            # Warn if any CPU/disk offload
+            if any(str(d).startswith("cpu") or str(d).startswith("disk") for d in unique_devices):
+                print("  ⚠ Detected CPU/disk offload in device_map. This will be very slow.")
         
         # Check memory after loading
         if torch.cuda.is_available():

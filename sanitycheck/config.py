@@ -72,5 +72,9 @@ RANDOM_SEED = 42  # For reproducibility
 # Hardware
 # ============================================================================
 
-DEVICE_MAP = "auto"  # Let transformers handle device placement
+# IMPORTANT (Single A6000 protocol requirement):
+# Use a single GPU. `device_map="auto"` can silently offload layers to CPU, which
+# makes generation look "stuck" / extremely slow on Windows.
+# For single-GPU runs, force everything onto GPU 0 via an explicit map.
+DEVICE_MAP = {"": 0}
 

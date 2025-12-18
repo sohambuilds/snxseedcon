@@ -322,3 +322,4 @@ def compute_functional_diversity(code_samples: List[str]) -> Dict[str, float]:
         "pct_recursion": sum(patterns["recursion"]) / n,
     }
 
+

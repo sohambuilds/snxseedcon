@@ -96,6 +96,40 @@ After inspecting outputs, design evaluation metrics:
 
 See Section 8 of `sanitycheckplan.md` for metric definitions.
 
+## Minimal Evaluation (Implemented)
+
+This repo now includes a deliberately simple evaluation workflow that matches the protocol:
+- **Validity@k** (human-labeled, binary) per output (§8.1)
+- **AlgDiversity@k** (human-labeled algorithm class) among *valid* outputs (§8.2)
+- **SigDiversity@k** (heuristic constraint signature) among *valid* outputs (§8.3)
+
+### 1) Create an annotation sheet (CSV)
+
+```bash
+python sanitycheck/make_annotations.py
+```
+
+This reads `sanitycheck/outputs/all_results.json` and writes:
+- `sanitycheck/outputs/annotations.csv`
+
+By default it includes **only Conditions B and C** (the plan’s comparison in §9). Use `--include-a` if you want A too.
+
+### 2) Fill the labels (manual)
+
+Open `sanitycheck/outputs/annotations.csv` and fill:
+- `valid`: `y` / `n`
+- `alg_class`: one of `greedy, dp, graph, math, brute, ds, other`
+- optional: `sig_override` if the auto signature is clearly wrong
+
+### 3) Compute metrics + summary table
+
+```bash
+python sanitycheck/compute_basic_metrics.py
+```
+
+This prints an average-over-prompts summary and writes:
+- `sanitycheck/outputs/metrics_summary.json`
+
 ## Configuration Options
 
 ### Model Selection

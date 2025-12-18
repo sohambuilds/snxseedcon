@@ -130,35 +130,45 @@ python sanitycheck/compute_basic_metrics.py
 This prints an average-over-prompts summary and writes:
 - `sanitycheck/outputs/metrics_summary.json`
 
-## Optional: Gemini Flash Judge
+## Optional: LLM Judge (Groq / Gemini)
 
-Use Gemini Flash as a supplementary signal (not the primary metric per plan, but useful for quick evaluation at scale).
+Use an LLM as a supplementary signal (not the primary metric per plan, but useful for quick evaluation at scale).
 
 Scores each problem on:
 - **Creativity/Uniqueness** (1-10): How novel is the problem idea?
 - **Validity/Solvability** (1-10 + PASS/FAIL): Is it well-formed and solvable?
 
-### Setup
+### Option A: Groq API (Recommended - Fast & Free Tier)
 
 ```bash
-pip install google-generativeai
-export GEMINI_API_KEY="your-api-key"
+pip install openai
+export GROQ_API_KEY="your-api-key"
+
+# Quick test
+python sanitycheck/groq_judge.py --n-per-condition 10
+
+# Full run
+python sanitycheck/groq_judge.py
+
+# Use different model
+python sanitycheck/groq_judge.py --model llama-3.1-8b-instant
 ```
 
-### Run
+Available Groq models: `llama-3.3-70b-versatile` (default), `llama-3.1-8b-instant`, `mixtral-8x7b-32768`
+
+### Option B: Gemini API
 
 ```bash
-# Quick test: 10 samples per condition
-python sanitycheck/gemini_judge.py --n-per-condition 10
+pip install google-genai
+export GEMINI_API_KEY="your-api-key"
 
-# Full run on all B+C outputs
-python sanitycheck/gemini_judge.py
+python sanitycheck/gemini_judge.py --n-per-condition 10
 ```
 
 ### Output
 
-- `sanitycheck/outputs/gemini_judgments.jsonl` - per-problem scores
-- `sanitycheck/outputs/gemini_judgments_summary.json` - aggregated B vs C comparison
+- `sanitycheck/outputs/groq_judgments.jsonl` (or `gemini_judgments.jsonl`)
+- `sanitycheck/outputs/groq_judgments_summary.json` - aggregated B vs C comparison
 
 ## Configuration Options
 

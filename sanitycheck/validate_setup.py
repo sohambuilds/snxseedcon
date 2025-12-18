@@ -25,7 +25,7 @@ import sanitycheck.config as config
 from sanitycheck.prompts import get_prompt
 from sanitycheck.embedding_noise_single import SingleShotEmbeddingNoise
 from src.model_loader import load_model
-from src.generation import GenerationConfig, generate_solution
+from sanitycheck.generation_utils import generate_text
 
 
 def validate():
@@ -120,8 +120,15 @@ def validate():
     print("\n  --- Condition A: Deterministic ---")
     try:
         noise_injector.deactivate()
-        gen_config = GenerationConfig(do_sample=False, max_new_tokens=256)
-        output_a = generate_solution(model, tokenizer, prompt, gen_config)
+        output_a = generate_text(
+            model=model,
+            tokenizer=tokenizer,
+            prompt=prompt,
+            do_sample=False,
+            temperature=None,
+            max_new_tokens=256,
+            min_new_tokens=min(32, getattr(config, "MIN_NEW_TOKENS", 64)),
+        )
         print(f"  ✓ Generated {len(output_a)} chars")
         print(f"  Preview: {output_a[:150]}...")
     except Exception as e:
@@ -132,12 +139,16 @@ def validate():
     print("\n  --- Condition B: Temperature Sampling ---")
     try:
         noise_injector.deactivate()
-        gen_config = GenerationConfig(
-            do_sample=True, 
-            temperature=config.TEMPERATURE, 
-            max_new_tokens=256
+        output_b = generate_text(
+            model=model,
+            tokenizer=tokenizer,
+            prompt=prompt,
+            do_sample=True,
+            temperature=config.TEMPERATURE,
+            max_new_tokens=256,
+            min_new_tokens=min(32, getattr(config, "MIN_NEW_TOKENS", 64)),
+            seed=0,
         )
-        output_b = generate_solution(model, tokenizer, prompt, gen_config)
         print(f"  ✓ Generated {len(output_b)} chars")
         print(f"  Preview: {output_b[:150]}...")
     except Exception as e:
@@ -149,8 +160,15 @@ def validate():
     try:
         noise_injector.set_seed(42)
         noise_injector.activate()  # This resets has_injected flag
-        gen_config = GenerationConfig(do_sample=False, max_new_tokens=256)
-        output_c = generate_solution(model, tokenizer, prompt, gen_config)
+        output_c = generate_text(
+            model=model,
+            tokenizer=tokenizer,
+            prompt=prompt,
+            do_sample=False,
+            temperature=None,
+            max_new_tokens=256,
+            min_new_tokens=min(32, getattr(config, "MIN_NEW_TOKENS", 64)),
+        )
         noise_injector.deactivate()
         print(f"  ✓ Generated {len(output_c)} chars")
         print(f"  Preview: {output_c[:150]}...")
@@ -164,12 +182,28 @@ def validate():
         # Generate twice with same seed - should be identical if noise is truly single-shot
         noise_injector.set_seed(123)
         noise_injector.activate()
-        out1 = generate_solution(model, tokenizer, prompt, gen_config)
+        out1 = generate_text(
+            model=model,
+            tokenizer=tokenizer,
+            prompt=prompt,
+            do_sample=False,
+            temperature=None,
+            max_new_tokens=256,
+            min_new_tokens=min(32, getattr(config, "MIN_NEW_TOKENS", 64)),
+        )
         noise_injector.deactivate()
         
         noise_injector.set_seed(123)
         noise_injector.activate()
-        out2 = generate_solution(model, tokenizer, prompt, gen_config)
+        out2 = generate_text(
+            model=model,
+            tokenizer=tokenizer,
+            prompt=prompt,
+            do_sample=False,
+            temperature=None,
+            max_new_tokens=256,
+            min_new_tokens=min(32, getattr(config, "MIN_NEW_TOKENS", 64)),
+        )
         noise_injector.deactivate()
         
         if out1 == out2:
@@ -181,7 +215,15 @@ def validate():
         # Different seeds should produce different outputs
         noise_injector.set_seed(456)
         noise_injector.activate()
-        out3 = generate_solution(model, tokenizer, prompt, gen_config)
+        out3 = generate_text(
+            model=model,
+            tokenizer=tokenizer,
+            prompt=prompt,
+            do_sample=False,
+            temperature=None,
+            max_new_tokens=256,
+            min_new_tokens=min(32, getattr(config, "MIN_NEW_TOKENS", 64)),
+        )
         noise_injector.deactivate()
         
         if out1 != out3:

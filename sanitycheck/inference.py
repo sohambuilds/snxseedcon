@@ -14,11 +14,11 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.model_loader import load_model
-from src.generation import GenerationConfig, generate_solution
 
 # Use single-shot noise injector specific to sanity check
 # This injects noise EXACTLY ONCE at first forward pass (per protocol Section 5C, 6)
 from sanitycheck.embedding_noise_single import SingleShotEmbeddingNoise
+from sanitycheck.generation_utils import generate_text
 
 
 @dataclass
@@ -117,10 +117,6 @@ class SanityCheckInference:
         print("Settings: temperature=0, no noise, 1 sample per prompt")
         
         results = []
-        config = GenerationConfig(
-            do_sample=False,
-            max_new_tokens=self.config.MAX_NEW_TOKENS,
-        )
         
         for prompt_idx, prompt_text in enumerate(self.prompts):
             if self.config.SHOW_PROGRESS:
@@ -130,11 +126,14 @@ class SanityCheckInference:
             self.noise_injector.deactivate()
             
             # Generate
-            generated = generate_solution(
+            generated = generate_text(
                 model=self.model,
                 tokenizer=self.tokenizer,
                 prompt=prompt_text,
-                config=config,
+                do_sample=False,
+                temperature=None,
+                max_new_tokens=self.config.MAX_NEW_TOKENS,
+                min_new_tokens=self.config.MIN_NEW_TOKENS,
             )
             
             result = GenerationResult(
@@ -166,11 +165,6 @@ class SanityCheckInference:
         print(f"Settings: temperature={self.config.TEMPERATURE}, no noise, {self.config.K_SAMPLES} samples per prompt")
         
         results = []
-        config = GenerationConfig(
-            do_sample=True,
-            temperature=self.config.TEMPERATURE,
-            max_new_tokens=self.config.MAX_NEW_TOKENS,
-        )
         
         for prompt_idx, prompt_text in enumerate(self.prompts):
             if self.config.SHOW_PROGRESS:
@@ -183,11 +177,16 @@ class SanityCheckInference:
                 if self.config.VERBOSE and self.config.SHOW_PROGRESS:
                     print(f"  Sample {sample_idx + 1}/{self.config.K_SAMPLES}...", end=" ")
                 
-                generated = generate_solution(
+                generated = generate_text(
                     model=self.model,
                     tokenizer=self.tokenizer,
                     prompt=prompt_text,
-                    config=config,
+                    do_sample=True,
+                    temperature=self.config.TEMPERATURE,
+                    max_new_tokens=self.config.MAX_NEW_TOKENS,
+                    min_new_tokens=self.config.MIN_NEW_TOKENS,
+                    # Make sampling reproducible per sample_idx while staying within Condition B
+                    seed=sample_idx,
                 )
                 
                 result = GenerationResult(
@@ -221,10 +220,6 @@ class SanityCheckInference:
         print(f"  Noise scope: {self.config.NOISE_SCOPE}")
         
         results = []
-        config = GenerationConfig(
-            do_sample=False,  # Greedy decoding
-            max_new_tokens=self.config.MAX_NEW_TOKENS,
-        )
         
         for prompt_idx, prompt_text in enumerate(self.prompts):
             if self.config.SHOW_PROGRESS:
@@ -238,11 +233,14 @@ class SanityCheckInference:
                 self.noise_injector.set_seed(sample_idx)
                 self.noise_injector.activate()
                 
-                generated = generate_solution(
+                generated = generate_text(
                     model=self.model,
                     tokenizer=self.tokenizer,
                     prompt=prompt_text,
-                    config=config,
+                    do_sample=False,
+                    temperature=None,
+                    max_new_tokens=self.config.MAX_NEW_TOKENS,
+                    min_new_tokens=self.config.MIN_NEW_TOKENS,
                 )
                 
                 # Deactivate noise after generation

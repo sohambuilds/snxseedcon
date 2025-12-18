@@ -39,6 +39,7 @@ NOISE_SCOPE = "per_sequence"  # Use shared noise vector for global plan shifts
 # ============================================================================
 
 MAX_NEW_TOKENS = 1024  # Enough for full competitive programming problem
+MIN_NEW_TOKENS = 64  # Prevent empty / newline-only generations (applied to A/B/C equally)
 GENERATION_TIMEOUT = 60  # Seconds per generation (safety)
 
 # ============================================================================

@@ -32,26 +32,34 @@ from pathlib import Path
 from dataclasses import dataclass, asdict
 from typing import Optional
 
+# Try new google.genai first, fall back to deprecated google.generativeai
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
+    USE_NEW_API = True
 except ImportError:
-    raise SystemExit(
-        "Missing google-generativeai. Install with:\n"
-        "  pip install google-generativeai"
-    )
+    try:
+        import google.generativeai as genai_old
+        USE_NEW_API = False
+        print("Warning: Using deprecated google.generativeai. Consider: pip install google-genai")
+    except ImportError:
+        raise SystemExit(
+            "Missing google-genai. Install with:\n"
+            "  pip install google-genai"
+        )
 
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-DEFAULT_MODEL = "gemini-2.0-flash"  # Latest flash model
-RATE_LIMIT_DELAY = 0.5  # seconds between API calls (be nice)
+DEFAULT_MODEL = "gemini-2.0-flash"
+RATE_LIMIT_DELAY = 0.5  # seconds between API calls
 
 JUDGE_PROMPT = """\
 You are an expert judge for competitive programming problems (Codeforces style).
 
-I will show you a generated problem. Please evaluate it on two dimensions:
+Evaluate the following generated problem on two dimensions:
 
 1. **Creativity / Uniqueness** (1-10):
    - 1-3: Very generic, seen many times (e.g., "find max in array")
@@ -65,21 +73,13 @@ I will show you a generated problem. Please evaluate it on two dimensions:
    - Is there a plausible solution within the stated constraints?
    - PASS = a competent programmer could solve it; FAIL = broken/unsolvable/incoherent
 
-Respond in **exactly** this JSON format (no markdown, no extra text):
-{
-  "creativity_score": <int 1-10>,
-  "creativity_reason": "<brief reason>",
-  "validity_score": <int 1-10>,
-  "validity_pass": <true or false>,
-  "validity_reason": "<brief reason>"
-}
+IMPORTANT: Respond with ONLY a JSON object, no other text:
+{"creativity_score": <1-10>, "creativity_reason": "<brief>", "validity_score": <1-10>, "validity_pass": <true/false>, "validity_reason": "<brief>"}
 
----
-PROBLEM TO EVALUATE:
-\"\"\"
+PROBLEM:
+```
 {problem_text}
-\"\"\"
-"""
+```"""
 
 
 # ---------------------------------------------------------------------------
@@ -106,34 +106,85 @@ def load_results(path: Path) -> list[dict]:
     return data.get("results", [])
 
 
-def parse_judgment(text: str) -> dict:
-    """Parse JSON from Gemini response (may have markdown fences)."""
-    # Strip markdown code fences if present
+def extract_json(text: str) -> dict:
+    """
+    Robustly extract JSON from Gemini response.
+    Handles: markdown fences, leading text, trailing text.
+    """
     text = text.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*", "", text)
-        text = re.sub(r"\s*```$", "", text)
-    return json.loads(text)
+    
+    # Try to find JSON object pattern
+    # Look for { ... } with proper JSON structure
+    json_patterns = [
+        # Pattern 1: Code fence with json
+        r'```json\s*(\{[\s\S]*?\})\s*```',
+        # Pattern 2: Code fence without language
+        r'```\s*(\{[\s\S]*?\})\s*```',
+        # Pattern 3: Raw JSON object (greedy, find outermost braces)
+        r'(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})',
+    ]
+    
+    for pattern in json_patterns:
+        match = re.search(pattern, text)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except json.JSONDecodeError:
+                continue
+    
+    # Last resort: try parsing the whole thing
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    
+    # Try to fix common issues
+    # Sometimes model returns with leading/trailing content
+    start = text.find('{')
+    end = text.rfind('}')
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(text[start:end+1])
+        except json.JSONDecodeError:
+            pass
+    
+    raise ValueError(f"Could not extract JSON from response: {text[:200]}...")
 
 
 # ---------------------------------------------------------------------------
 # Gemini API
 # ---------------------------------------------------------------------------
 
-def init_gemini(api_key: str, model_name: str):
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel(model_name)
+def init_gemini_new(api_key: str, model_name: str):
+    """Initialize using new google.genai API."""
+    client = genai.Client(api_key=api_key)
+    return client, model_name
 
 
-def judge_problem(model, problem_text: str) -> tuple[dict, str]:
-    """
-    Call Gemini to judge a single problem.
-    Returns (parsed_dict, raw_response_text).
-    """
-    prompt = JUDGE_PROMPT.format(problem_text=problem_text[:8000])  # truncate if huge
+def init_gemini_old(api_key: str, model_name: str):
+    """Initialize using deprecated google.generativeai API."""
+    genai_old.configure(api_key=api_key)
+    return genai_old.GenerativeModel(model_name), model_name
+
+
+def judge_problem_new(client, model_name: str, problem_text: str) -> tuple[dict, str]:
+    """Call Gemini using new API."""
+    prompt = JUDGE_PROMPT.format(problem_text=problem_text[:8000])
+    response = client.models.generate_content(
+        model=model_name,
+        contents=prompt,
+    )
+    raw = response.text
+    parsed = extract_json(raw)
+    return parsed, raw
+
+
+def judge_problem_old(model, problem_text: str) -> tuple[dict, str]:
+    """Call Gemini using deprecated API."""
+    prompt = JUDGE_PROMPT.format(problem_text=problem_text[:8000])
     response = model.generate_content(prompt)
     raw = response.text
-    parsed = parse_judgment(raw)
+    parsed = extract_json(raw)
     return parsed, raw
 
 
@@ -209,9 +260,13 @@ def main():
 
     print(f"Judging {len(filtered)} outputs with {args.model}...")
     print(f"Conditions: {keep_conditions}")
+    print(f"API: {'google.genai (new)' if USE_NEW_API else 'google.generativeai (deprecated)'}")
 
     # Init Gemini
-    model = init_gemini(api_key, args.model)
+    if USE_NEW_API:
+        client, model_name = init_gemini_new(api_key, args.model)
+    else:
+        client, model_name = init_gemini_old(api_key, args.model)
 
     # Judge each
     judgments: list[Judgment] = []
@@ -245,16 +300,20 @@ def main():
                 continue
 
             try:
-                parsed, raw = judge_problem(model, text)
+                if USE_NEW_API:
+                    parsed, raw = judge_problem_new(client, model_name, text)
+                else:
+                    parsed, raw = judge_problem_old(client, text)
+                    
                 j = Judgment(
                     condition=cond,
                     prompt_idx=prompt_idx,
                     sample_idx=sample_idx,
-                    creativity_score=parsed.get("creativity_score", 0),
-                    creativity_reason=parsed.get("creativity_reason", ""),
-                    validity_score=parsed.get("validity_score", 0),
-                    validity_pass=parsed.get("validity_pass", False),
-                    validity_reason=parsed.get("validity_reason", ""),
+                    creativity_score=int(parsed.get("creativity_score", 0)),
+                    creativity_reason=str(parsed.get("creativity_reason", "")),
+                    validity_score=int(parsed.get("validity_score", 0)),
+                    validity_pass=bool(parsed.get("validity_pass", False)),
+                    validity_reason=str(parsed.get("validity_reason", "")),
                     raw_response=raw,
                 )
                 print(f"C={j.creativity_score} V={j.validity_score} {'PASS' if j.validity_pass else 'FAIL'}")
@@ -332,4 +391,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

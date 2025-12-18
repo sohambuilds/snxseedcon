@@ -21,7 +21,7 @@ import csv
 import json
 from pathlib import Path
 
-from sanitycheck.signature_utils import build_signature
+from signature_utils import build_signature
 
 
 ALG_CLASS_CHOICES = ["greedy", "dp", "graph", "math", "brute", "ds", "other"]

@@ -130,6 +130,36 @@ python sanitycheck/compute_basic_metrics.py
 This prints an average-over-prompts summary and writes:
 - `sanitycheck/outputs/metrics_summary.json`
 
+## Optional: Gemini Flash Judge
+
+Use Gemini Flash as a supplementary signal (not the primary metric per plan, but useful for quick evaluation at scale).
+
+Scores each problem on:
+- **Creativity/Uniqueness** (1-10): How novel is the problem idea?
+- **Validity/Solvability** (1-10 + PASS/FAIL): Is it well-formed and solvable?
+
+### Setup
+
+```bash
+pip install google-generativeai
+export GEMINI_API_KEY="your-api-key"
+```
+
+### Run
+
+```bash
+# Quick test: 10 samples per condition
+python sanitycheck/gemini_judge.py --n-per-condition 10
+
+# Full run on all B+C outputs
+python sanitycheck/gemini_judge.py
+```
+
+### Output
+
+- `sanitycheck/outputs/gemini_judgments.jsonl` - per-problem scores
+- `sanitycheck/outputs/gemini_judgments_summary.json` - aggregated B vs C comparison
+
 ## Configuration Options
 
 ### Model Selection

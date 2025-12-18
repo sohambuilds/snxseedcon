@@ -1,0 +1,24 @@
+{
+  "B": {
+    "n": 100,
+    "n_errors": 0,
+    "creativity_mean": 2.58,
+    "creativity_min": 1,
+    "creativity_max": 5,
+    "validity_mean": 2.67,
+    "validity_min": 1,
+    "validity_max": 9,
+    "validity_pass_rate": 0.13
+  },
+  "C": {
+    "n": 100,
+    "n_errors": 0,
+    "creativity_mean": 2.65,
+    "creativity_min": 1,
+    "creativity_max": 5,
+    "validity_mean": 3.03,
+    "validity_min": 1,
+    "validity_max": 9,
+    "validity_pass_rate": 0.21
+  }
+}

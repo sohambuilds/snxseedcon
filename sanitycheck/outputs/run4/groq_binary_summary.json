@@ -1,0 +1,24 @@
+{
+  "B": {
+    "n_total": 100,
+    "n_empty": 0,
+    "n_errors": 0,
+    "creative_pass": 62,
+    "creative_rate": 0.62,
+    "valid_pass": 48,
+    "valid_rate": 0.48,
+    "both_pass": 44,
+    "both_rate": 0.44
+  },
+  "C": {
+    "n_total": 100,
+    "n_empty": 0,
+    "n_errors": 0,
+    "creative_pass": 71,
+    "creative_rate": 0.71,
+    "valid_pass": 44,
+    "valid_rate": 0.44,
+    "both_pass": 44,
+    "both_rate": 0.44
+  }
+}

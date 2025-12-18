@@ -1,0 +1,21 @@
+{
+  "runs": [
+    "run2",
+    "run3",
+    "run4"
+  ],
+  "n_common": 200,
+  "unanimous": {
+    "total": 200,
+    "creative_unanimous": 172,
+    "creative_rate": 0.86,
+    "valid_unanimous": 153,
+    "valid_rate": 0.765,
+    "both_unanimous": 138,
+    "both_rate": 0.69
+  },
+  "fleiss_kappa": {
+    "creative": 0.7974537037037036,
+    "valid": 0.6851237731551268
+  }
+}

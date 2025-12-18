@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-Use Groq API to score generated competitive programming problems.
+Binary pass/fail judgment for generated competitive programming problems.
 
-Scores:
-  1. Creativity/Uniqueness (1-10): How novel/interesting is the problem idea?
-  2. Validity (1-10 + pass/fail): Is it a well-formed, solvable problem?
+Simpler than groq_judge.py - just asks:
+  - Is this creative/non-generic? (true/false)
+  - Is this a valid problem? (true/false)
+
+More lenient criteria suitable for weaker models like deepseek-6.7b.
 
 Usage:
     export GROQ_API_KEY="your-key-here"
-    python sanitycheck/groq_judge.py --n-per-condition 10
+    python sanitycheck/groq_judge2.py --n-per-condition 10
 """
 
 from __future__ import annotations
@@ -30,27 +32,30 @@ except ImportError:
     )
 
 
-DEFAULT_MODEL = "openai/gpt-oss-120b"
+DEFAULT_MODEL = "openai/gpt-oss-20b"
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 RATE_LIMIT_DELAY = 0.3
 
+# Lenient prompt for weaker models
 JUDGE_PROMPT = """\
-You are an expert judge for competitive programming problems.
+You are evaluating a generated competitive programming problem.
 
-Rate this problem on TWO dimensions:
+Answer TWO yes/no questions:
 
-1. CREATIVITY (1-10): How novel/original is the problem idea?
-   1-3 = Very generic (find max, simple loop)
-   4-6 = Standard with minor twist  
-   7-10 = Interesting/original idea
+1. CREATIVE: Does this contain ANY problem idea (not just boilerplate/code/empty)?
+   - YES if there's an actual problem statement with some task to solve
+   - NO if it's just code, empty, boilerplate, or completely incoherent
 
-2. VALIDITY (1-10): Is it a well-formed, solvable problem?
-   Also mark PASS if solvable, FAIL if broken/incoherent.
+2. VALID: Could this problem theoretically be solved?
+   - YES if there's a clear task, even if constraints are missing or vague
+   - NO if the problem is fundamentally broken, contradictory, or unsolvable
 
-Return ONLY valid JSON, no other text:
-{"creativity_score": 5, "creativity_reason": "brief reason", "validity_score": 7, "validity_pass": true, "validity_reason": "brief reason"}
+Be LENIENT - we're evaluating a small model. Accept partial/incomplete problems.
 
-PROBLEM TO JUDGE:
+Return ONLY valid JSON:
+{"creative": true, "creative_reason": "brief", "valid": true, "valid_reason": "brief"}
+
+PROBLEM:
 """
 
 
@@ -59,11 +64,10 @@ class Judgment:
     condition: str
     prompt_idx: int
     sample_idx: int
-    creativity_score: int
-    creativity_reason: str
-    validity_score: int
-    validity_pass: bool
-    validity_reason: str
+    creative: bool
+    creative_reason: str
+    valid: bool
+    valid_reason: str
     raw_response: str
     error: Optional[str] = None
 
@@ -128,14 +132,13 @@ def call_groq(client: OpenAI, model: str, problem_text: str) -> str:
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Groq API judge for sanity check")
+    ap = argparse.ArgumentParser(description="Binary pass/fail Groq judge")
     ap.add_argument("--results", default="sanitycheck/outputs/all_results.json")
-    ap.add_argument("--out-jsonl", default="sanitycheck/outputs/groq_judgments.jsonl")
-    ap.add_argument("--out-summary", default="sanitycheck/outputs/groq_judgments_summary.json")
+    ap.add_argument("--out-jsonl", default="sanitycheck/outputs/groq_binary_judgments.jsonl")
+    ap.add_argument("--out-summary", default="sanitycheck/outputs/groq_binary_summary.json")
     ap.add_argument("--n-per-condition", type=int, default=None)
     ap.add_argument("--include-a", action="store_true")
-    ap.add_argument("--model", default=os.environ.get("GROQ_MODEL", DEFAULT_MODEL),
-                    help="Groq model (default: openai/gpt-oss-20b)")
+    ap.add_argument("--model", default=os.environ.get("GROQ_MODEL", DEFAULT_MODEL))
     ap.add_argument("--debug", action="store_true", help="Print raw responses on error")
     args = ap.parse_args()
 
@@ -151,7 +154,7 @@ def main():
     out_summary = Path(args.out_summary)
     out_jsonl.parent.mkdir(parents=True, exist_ok=True)
 
-    # Initialize Groq client (OpenAI-compatible)
+    # Initialize Groq client
     client = OpenAI(
         api_key=api_key,
         base_url=GROQ_BASE_URL,
@@ -174,6 +177,7 @@ def main():
 
     print(f"Judging {len(filtered)} outputs with Groq ({args.model})...")
     print(f"Conditions: {keep_conditions}")
+    print(f"Mode: Binary pass/fail (lenient)")
 
     judgments: list[Judgment] = []
     
@@ -186,36 +190,45 @@ def main():
 
             print(f"  [{i+1}/{len(filtered)}] {cond} p{prompt_idx} s{sample_idx}...", end=" ", flush=True)
 
-            # Skip empty/whitespace
+            # Skip empty/whitespace - auto-fail
             if not text.strip():
                 j = Judgment(
                     condition=cond, prompt_idx=prompt_idx, sample_idx=sample_idx,
-                    creativity_score=0, creativity_reason="Empty output",
-                    validity_score=0, validity_pass=False, validity_reason="Empty output",
+                    creative=False, creative_reason="Empty output",
+                    valid=False, valid_reason="Empty output",
                     raw_response="", error="empty_output",
                 )
                 judgments.append(j)
                 f_out.write(json.dumps(asdict(j)) + "\n")
-                print("SKIP (empty)")
+                print("SKIP (empty) -> C=✗ V=✗")
                 continue
 
             raw = ""
             try:
-                # Truncate very long texts
                 truncated = text[:5000] if len(text) > 5000 else text
                 raw = call_groq(client, args.model, truncated)
                 parsed = extract_json(raw)
+                
+                # Handle various boolean formats
+                creative = parsed.get("creative", False)
+                if isinstance(creative, str):
+                    creative = creative.lower() in ("true", "yes", "1")
+                    
+                valid = parsed.get("valid", False)
+                if isinstance(valid, str):
+                    valid = valid.lower() in ("true", "yes", "1")
                     
                 j = Judgment(
                     condition=cond, prompt_idx=prompt_idx, sample_idx=sample_idx,
-                    creativity_score=int(parsed.get("creativity_score", 0)),
-                    creativity_reason=str(parsed.get("creativity_reason", "")),
-                    validity_score=int(parsed.get("validity_score", 0)),
-                    validity_pass=bool(parsed.get("validity_pass", False)),
-                    validity_reason=str(parsed.get("validity_reason", "")),
+                    creative=bool(creative),
+                    creative_reason=str(parsed.get("creative_reason", "")),
+                    valid=bool(valid),
+                    valid_reason=str(parsed.get("valid_reason", "")),
                     raw_response=raw,
                 )
-                print(f"C={j.creativity_score} V={j.validity_score} {'PASS' if j.validity_pass else 'FAIL'}")
+                c_mark = "✓" if j.creative else "✗"
+                v_mark = "✓" if j.valid else "✗"
+                print(f"C={c_mark} V={v_mark}")
                 
             except Exception as e:
                 error_msg = str(e)
@@ -223,12 +236,12 @@ def main():
                     print(f"\nDEBUG raw response:\n{raw[:500]}\n")
                 j = Judgment(
                     condition=cond, prompt_idx=prompt_idx, sample_idx=sample_idx,
-                    creativity_score=0, creativity_reason="",
-                    validity_score=0, validity_pass=False, validity_reason="",
+                    creative=False, creative_reason="",
+                    valid=False, valid_reason="",
                     raw_response=raw,
                     error=error_msg,
                 )
-                print(f"ERROR: {error_msg[:80]}")
+                print(f"ERROR: {error_msg[:60]}")
 
             judgments.append(j)
             f_out.write(json.dumps(asdict(j)) + "\n")
@@ -238,49 +251,61 @@ def main():
 
     # Aggregate
     print("\n" + "="*60)
-    print("SUMMARY")
+    print("SUMMARY (Binary Pass/Fail)")
     print("="*60)
 
     summary = {}
     for cond in sorted(keep_conditions):
-        cond_js = [j for j in judgments if j.condition == cond and j.error is None]
-        n_errors = sum(1 for j in judgments if j.condition == cond and j.error)
+        cond_js = [j for j in judgments if j.condition == cond]
+        n_errors = sum(1 for j in cond_js if j.error and j.error != "empty_output")
+        n_empty = sum(1 for j in cond_js if j.error == "empty_output")
         
-        if not cond_js:
-            summary[cond] = {"n": 0, "n_errors": n_errors}
-            continue
-
-        creativity_scores = [j.creativity_score for j in cond_js]
-        validity_scores = [j.validity_score for j in cond_js]
-        validity_passes = [j.validity_pass for j in cond_js]
-
+        # Include all judgments (empty ones count as False)
+        creative_passes = sum(1 for j in cond_js if j.creative)
+        valid_passes = sum(1 for j in cond_js if j.valid)
+        both_passes = sum(1 for j in cond_js if j.creative and j.valid)
+        
+        total = len(cond_js)
+        
         stats = {
-            "n": len(cond_js),
+            "n_total": total,
+            "n_empty": n_empty,
             "n_errors": n_errors,
-            "creativity_mean": sum(creativity_scores) / len(creativity_scores),
-            "creativity_min": min(creativity_scores),
-            "creativity_max": max(creativity_scores),
-            "validity_mean": sum(validity_scores) / len(validity_scores),
-            "validity_min": min(validity_scores),
-            "validity_max": max(validity_scores),
-            "validity_pass_rate": sum(validity_passes) / len(validity_passes),
+            "creative_pass": creative_passes,
+            "creative_rate": creative_passes / total if total > 0 else 0,
+            "valid_pass": valid_passes,
+            "valid_rate": valid_passes / total if total > 0 else 0,
+            "both_pass": both_passes,
+            "both_rate": both_passes / total if total > 0 else 0,
         }
         summary[cond] = stats
 
-        print(f"\nCondition {cond} (n={stats['n']}, errors={stats['n_errors']}):")
-        print(f"  Creativity:  mean={stats['creativity_mean']:.2f}  range=[{stats['creativity_min']}, {stats['creativity_max']}]")
-        print(f"  Validity:    mean={stats['validity_mean']:.2f}  range=[{stats['validity_min']}, {stats['validity_max']}]")
-        print(f"  Pass rate:   {stats['validity_pass_rate']*100:.1f}%")
+        print(f"\nCondition {cond} (n={total}, empty={n_empty}, errors={n_errors}):")
+        print(f"  Creative: {creative_passes}/{total} = {stats['creative_rate']*100:.1f}%")
+        print(f"  Valid:    {valid_passes}/{total} = {stats['valid_rate']*100:.1f}%")
+        print(f"  Both:     {both_passes}/{total} = {stats['both_rate']*100:.1f}%")
 
     # Compare B vs C
-    if "B" in summary and "C" in summary and summary["B"].get("n", 0) > 0 and summary["C"].get("n", 0) > 0:
+    if "B" in summary and "C" in summary:
         print("\n" + "-"*60)
         print("B vs C Comparison:")
         print("-"*60)
         b, c = summary["B"], summary["C"]
-        print(f"  Creativity:  B={b['creativity_mean']:.2f}  C={c['creativity_mean']:.2f}  Δ={c['creativity_mean']-b['creativity_mean']:+.2f}")
-        print(f"  Validity:    B={b['validity_mean']:.2f}  C={c['validity_mean']:.2f}  Δ={c['validity_mean']-b['validity_mean']:+.2f}")
-        print(f"  Pass rate:   B={b['validity_pass_rate']*100:.1f}%  C={c['validity_pass_rate']*100:.1f}%")
+        
+        print(f"  Creative rate:  B={b['creative_rate']*100:.1f}%  C={c['creative_rate']*100:.1f}%  Δ={( c['creative_rate']-b['creative_rate'])*100:+.1f}%")
+        print(f"  Valid rate:     B={b['valid_rate']*100:.1f}%  C={c['valid_rate']*100:.1f}%  Δ={(c['valid_rate']-b['valid_rate'])*100:+.1f}%")
+        print(f"  Both rate:      B={b['both_rate']*100:.1f}%  C={c['both_rate']*100:.1f}%  Δ={(c['both_rate']-b['both_rate'])*100:+.1f}%")
+        
+        # Key insight
+        print("\n  Interpretation:")
+        if c['creative_rate'] > b['creative_rate'] and c['valid_rate'] >= b['valid_rate'] * 0.9:
+            print("  ✓ Embedding noise (C) shows higher creativity with similar validity")
+        elif c['creative_rate'] > b['creative_rate']:
+            print("  ~ Embedding noise (C) shows higher creativity but lower validity")
+        elif c['creative_rate'] < b['creative_rate']:
+            print("  ✗ Temperature (B) shows higher creativity than embedding noise (C)")
+        else:
+            print("  ~ Similar creative rates between B and C")
 
     with open(out_summary, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
@@ -291,3 +316,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
